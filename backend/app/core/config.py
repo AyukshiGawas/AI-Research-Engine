@@ -53,6 +53,20 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = Field(default=False, description="Set Secure flag on HttpOnly cookies")
     COOKIE_SAMESITE: str = Field(default="lax", description="SameSite policy for HttpOnly cookies")
 
+    # Phase 3: Document Upload Settings
+    UPLOAD_DIR: str = Field(
+        default="uploads",
+        description="Root directory for storing uploaded document files (relative to backend/)",
+    )
+    MAX_UPLOAD_SIZE_BYTES: int = Field(
+        default=26_214_400,  # 25 MB
+        description="Maximum allowed upload size in bytes",
+    )
+    ALLOWED_EXTENSIONS: list[str] = Field(
+        default=["pdf", "docx", "txt", "md"],
+        description="Permitted file extensions for document uploads",
+    )
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

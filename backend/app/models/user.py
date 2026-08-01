@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.refresh_token import RefreshToken
     from app.models.project import Project
     from app.models.audit_log import AuditLog
+    from app.models.document import Document
 
 
 class User(Base):
@@ -54,3 +55,6 @@ class User(Base):
         "Project", back_populates="owner", cascade="all, delete-orphan"
     )
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="user")
+    documents: Mapped[List["Document"]] = relationship(
+        "Document", back_populates="uploaded_by_user"
+    )

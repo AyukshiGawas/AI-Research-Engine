@@ -1,8 +1,9 @@
 """Pytest configuration and test fixtures for backend API suite."""
 
-import asyncio
 from typing import AsyncGenerator
+
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -22,14 +23,7 @@ TestingSessionLocal = async_sessionmaker(
 )
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def prepare_database():
     """Create fresh database tables for each test and drop them afterwards."""
     async with test_engine.begin() as conn:
@@ -39,14 +33,14 @@ async def prepare_database():
         await conn.run_sync(Base.metadata.drop_all)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """Yield an async database session for unit testing."""
     async with TestingSessionLocal() as session:
         yield session
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Yield an AsyncClient configured with test database session override."""
     async def _override_get_db():

@@ -15,18 +15,19 @@ from app.repositories.user_repository import UserRepository
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
-async def get_current_user(
+async def get_current_user_optional(
     token: Optional[str] = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
-) -> User:
-    """Dependency injecting current authenticated user from JWT Bearer token."""
+) -> Optional[User]:
+    """Dependency injecting an authenticated user when a Bearer token is present."""
+    if not token:
+        return None
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials.",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if not token:
-        raise credentials_exception
 
     payload = decode_access_token(token)
     if not payload:
@@ -43,6 +44,24 @@ async def get_current_user(
 
     user_repo = UserRepository(db)
     user = await user_repo.get_by_id(user_uuid)
+    if not user:
+        raise credentials_exception
+
+    return user
+
+
+async def get_current_user(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Dependency injecting current authenticated user from JWT Bearer token."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    user = await get_current_user_optional(token=token, db=db)
     if not user:
         raise credentials_exception
 

@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 from sqlalchemy import String, Text, DateTime, UUID, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +10,7 @@ from app.db.session import Base
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.document import Document
 
 
 class Project(Base):
@@ -47,3 +48,6 @@ class Project(Base):
 
     # Relationships
     owner: Mapped["User"] = relationship("User", back_populates="projects")
+    documents: Mapped[List["Document"]] = relationship(
+        "Document", back_populates="project", cascade="all, delete-orphan"
+    )

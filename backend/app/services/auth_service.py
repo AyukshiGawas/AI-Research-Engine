@@ -166,7 +166,15 @@ class AuthService:
             )
 
         now = datetime.now(timezone.utc)
-        if token_record.expires_at < now:
+        expires_at = token_record.expires_at
+        if expires_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token has no expiry timestamp.",
+            )
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < now:
             await self.token_repo.revoke(token_record)
             await self.audit_service.record_event(
                 event_type="TOKEN_REFRESH_FAILED_EXPIRED",
