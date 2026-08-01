@@ -2,7 +2,7 @@
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -14,6 +14,15 @@ from app.core.logging import configure_logging, logger
 from app.core.rate_limit import limiter
 from app.db.session import engine
 from app.db.base import Base
+from app.exceptions import (
+    AppException,
+    DocumentNotFoundError,
+    DuplicateDocumentError,
+    FileTooLargeError,
+    InvalidDocumentTypeError,
+    StorageFailureError,
+    UnauthorizedDocumentAccessError,
+)
 
 
 @asynccontextmanager
@@ -55,6 +64,25 @@ app = FastAPI(
 # Register Slowapi Rate Limiter
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(AppException)
+async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+    """Translate domain exceptions into stable HTTP responses."""
+    if isinstance(exc, DocumentNotFoundError):
+        status_code = status.HTTP_404_NOT_FOUND
+    elif isinstance(exc, DuplicateDocumentError):
+        status_code = status.HTTP_409_CONFLICT
+    elif isinstance(exc, InvalidDocumentTypeError):
+        status_code = status.HTTP_400_BAD_REQUEST
+    elif isinstance(exc, FileTooLargeError):
+        status_code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    elif isinstance(exc, UnauthorizedDocumentAccessError):
+        status_code = status.HTTP_403_FORBIDDEN
+    else:
+        status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+
+    return JSONResponse(status_code=status_code, content={"detail": str(exc)})
 
 # Configure CORS Middleware
 origins = settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else [settings.CORS_ORIGINS]

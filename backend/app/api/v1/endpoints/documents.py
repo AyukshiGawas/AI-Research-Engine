@@ -5,25 +5,23 @@ Route handlers only perform I/O wiring (request parsing, response serialisation)
 """
 
 from typing import List
-from pathlib import Path
+import uuid
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.storage import storage_provider
 from app.db.session import get_db
 from app.dependencies.auth import get_current_active_user
 from app.models.user import User
 from app.schemas.document import DocumentDeleteResponse, DocumentRead, DocumentUploadResponse
 from app.services.document_service import DocumentService
-import uuid
 
 router = APIRouter()
 
 
 @router.post(
-    "/{project_id}/documents/upload",
+    "/{project_id}/documents",
     response_model=DocumentUploadResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Upload a research document",
@@ -105,12 +103,13 @@ async def download_document(
     Sets ``Content-Disposition: attachment`` using the original filename.
     """
     document_service = DocumentService(db)
-    document = await document_service.get_document(project_id, document_id, current_user.id)
-    abs_path = storage_provider.resolve(document.storage_path)
+    descriptor = await document_service.get_download_descriptor(
+        project_id, document_id, current_user.id
+    )
     return FileResponse(
-        path=str(abs_path),
-        filename=document.original_filename,
-        media_type=document.mime_type,
+        path=descriptor.path,
+        filename=descriptor.filename,
+        media_type=descriptor.mime_type,
     )
 
 

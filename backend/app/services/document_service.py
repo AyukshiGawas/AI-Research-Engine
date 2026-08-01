@@ -13,19 +13,34 @@ No business logic belongs in endpoint route handlers.
 """
 
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.storage import compute_sha256, storage_provider
+from app.exceptions import (
+    DocumentNotFoundError,
+    DuplicateDocumentError,
+    FileTooLargeError,
+    InvalidDocumentTypeError,
+    StorageFailureError,
+    UnauthorizedDocumentAccessError,
+)
 from app.models.document import Document, DocumentStatus
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.project_repository import ProjectRepository
 from app.services.audit_service import AuditService
+from app.validators.document_validator import (
+    DocumentValidationError,
+    read_upload_bytes,
+    validate_extension,
+    validate_mime_type,
+)
 
 # Map allowed extensions to their canonical MIME types
 _MIME_MAP: dict[str, str] = {
@@ -44,6 +59,15 @@ _MAGIC_BYTES: dict[str, list[bytes]] = {
 }
 
 
+@dataclass(frozen=True)
+class DownloadDescriptor:
+    """Service-layer result for document downloads."""
+
+    path: str
+    filename: str
+    mime_type: str
+
+
 class DocumentService:
     """Business logic for document upload, listing, detail retrieval, and deletion."""
 
@@ -58,87 +82,30 @@ class DocumentService:
     # ------------------------------------------------------------------
 
     def _validate_extension(self, filename: str) -> str:
-        """Extract and validate the file extension.
-
-        Args:
-            filename: Original client-supplied filename.
-
-        Returns:
-            Lowercase extension string WITHOUT leading dot (e.g. ``"pdf"``).
-
-        Raises:
-            HTTPException 400: Extension is empty or not in the allow-list.
-        """
-        ext = Path(filename).suffix.lstrip(".").lower()
-        if not ext or ext not in settings.ALLOWED_EXTENSIONS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Unsupported file type '.{ext}'. "
-                    f"Allowed: {', '.join(settings.ALLOWED_EXTENSIONS)}"
-                ),
-            )
-        return ext
+        """Extract and validate the file extension."""
+        try:
+            return validate_extension(filename)
+        except DocumentValidationError as exc:
+            raise InvalidDocumentTypeError(str(exc)) from exc
 
     def _validate_magic_bytes(self, data: bytes, extension: str) -> None:
-        """Check binary magic bytes match the declared extension.
-
-        Only PDF and DOCX have deterministic magic signatures.
-        TXT and MD are skipped — content-based detection is unreliable for UTF-8 text.
-
-        Args:
-            data: Raw file bytes (at least first 8 bytes are sufficient).
-            extension: Already-validated lowercase extension.
-
-        Raises:
-            HTTPException 400: Magic bytes don't match the declared type.
-        """
+        """Check binary magic bytes match the declared extension."""
         expected_magic = _MAGIC_BYTES.get(extension, [])
         if not expected_magic:
-            return  # No magic signature for this type; skip check
+            return
 
         header = data[:8]
         if not any(header.startswith(magic) for magic in expected_magic):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"File content does not match the declared type '.{extension}'. "
-                    "Please upload an unmodified file."
-                ),
+            raise InvalidDocumentTypeError(
+                f"File content does not match the declared type '.{extension}'."
             )
 
     async def _read_upload_stream(self, upload: UploadFile) -> bytes:
-        """Read the entire upload stream, enforcing the size cap.
-
-        Args:
-            upload: FastAPI ``UploadFile`` object.
-
-        Returns:
-            Full file contents as bytes.
-
-        Raises:
-            HTTPException 413: Accumulated bytes exceed ``MAX_UPLOAD_SIZE_BYTES``.
-        """
-        max_bytes = settings.MAX_UPLOAD_SIZE_BYTES
-        chunks: list[bytes] = []
-        total_bytes = 0
-
-        while True:
-            chunk = await upload.read(1024 * 64)  # 64 KB chunks
-            if not chunk:
-                break
-            total_bytes += len(chunk)
-            if total_bytes > max_bytes:
-                raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail=(
-                        f"File exceeds the maximum allowed size of "
-                        f"{max_bytes // (1024 * 1024)} MB."
-                    ),
-                )
-            chunks.append(chunk)
-
-        return b"".join(chunks)
+        """Read the entire upload stream, enforcing the size cap."""
+        try:
+            return await read_upload_bytes(upload, settings.MAX_UPLOAD_SIZE_BYTES)
+        except DocumentValidationError as exc:
+            raise FileTooLargeError(str(exc)) from exc
 
     async def _assert_project_ownership(
         self, project_id: uuid.UUID, user_id: uuid.UUID
@@ -150,19 +117,14 @@ class DocumentService:
             user_id: UUID of the currently authenticated user.
 
         Raises:
-            HTTPException 404: Project does not exist.
-            HTTPException 403: Project exists but belongs to another user.
+            UnauthorizedDocumentAccessError: Project does not exist or is not owned.
         """
         project = await self.project_repo.get_by_id(project_id)
         if not project:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project workspace not found.",
-            )
+            raise UnauthorizedDocumentAccessError("Project workspace not found.")
         if project.owner_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have access to this project workspace.",
+            raise UnauthorizedDocumentAccessError(
+                "You do not have access to this project workspace."
             )
 
     # ------------------------------------------------------------------
@@ -206,22 +168,23 @@ class DocumentService:
         data = await self._read_upload_stream(upload)
         self._validate_magic_bytes(data, ext)
 
+        try:
+            mime_type = validate_mime_type(ext, upload.content_type)
+        except DocumentValidationError as exc:
+            raise InvalidDocumentTypeError(str(exc)) from exc
+
         content_hash = compute_sha256(data)
 
         # De-duplication: reject identical content already in this project
         existing = await self.doc_repo.get_by_content_hash(project_id, content_hash)
         if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"An identical file '{existing.original_filename}' already exists "
-                    "in this project workspace."
-                ),
+            raise DuplicateDocumentError(
+                f"An identical file '{existing.original_filename}' already exists "
+                "in this project workspace."
             )
 
         document_id = uuid.uuid4()
         stored_filename = f"{document_id}.{ext}"
-        mime_type = _MIME_MAP.get(ext, "application/octet-stream")
 
         # Write to disk (atomic: DB commit happens after; on failure we clean up)
         storage_path = await storage_provider.save(
@@ -250,10 +213,7 @@ class DocumentService:
             # Atomic cleanup: remove orphaned file on DB failure
             await storage_provider.delete(storage_path)
             logger.error(f"DOCUMENT | DB persist failed; disk file cleaned up | {exc}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to persist document record.",
-            ) from exc
+            raise StorageFailureError("Failed to persist document record.") from exc
 
         await self.audit_service.record_event(
             event_type="DOCUMENT_UPLOAD_SUCCESS",
@@ -306,16 +266,32 @@ class DocumentService:
             Document ORM instance.
 
         Raises:
-            HTTPException 404: Document not found in this project.
+            DocumentNotFoundError: Document not found in this project.
         """
         await self._assert_project_ownership(project_id, requester_id)
         document = await self.doc_repo.get_by_id_and_project(document_id, project_id)
         if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found in this project workspace.",
-            )
+            raise DocumentNotFoundError("Document not found in this project workspace.")
         return document
+
+    async def get_download_descriptor(
+        self,
+        project_id: uuid.UUID,
+        document_id: uuid.UUID,
+        requester_id: uuid.UUID,
+    ) -> DownloadDescriptor:
+        """Return the file path and metadata needed to stream a document download."""
+        await self._assert_project_ownership(project_id, requester_id)
+        document = await self.doc_repo.get_by_id_and_project(document_id, project_id)
+        if not document:
+            raise DocumentNotFoundError("Document not found in this project workspace.")
+
+        file_path = storage_provider.resolve(document.storage_path)
+        return DownloadDescriptor(
+            path=str(file_path),
+            filename=document.original_filename,
+            mime_type=document.mime_type,
+        )
 
     async def delete_document(
         self,
@@ -337,10 +313,7 @@ class DocumentService:
         await self._assert_project_ownership(project_id, requester_id)
         document = await self.doc_repo.get_by_id_and_project(document_id, project_id)
         if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found in this project workspace.",
-            )
+            raise DocumentNotFoundError("Document not found in this project workspace.")
 
         storage_path = document.storage_path
         original_filename = document.original_filename
