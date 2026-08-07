@@ -16,12 +16,15 @@ from app.db.session import engine
 from app.db.base import Base
 from app.exceptions import (
     AppException,
+    DocumentExtractionError,
     DocumentNotFoundError,
+    DocumentProcessingError,
     DuplicateDocumentError,
     FileTooLargeError,
     InvalidDocumentTypeError,
     StorageFailureError,
     UnauthorizedDocumentAccessError,
+    UnsupportedDocumentTypeError,
 )
 
 
@@ -73,16 +76,19 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
         status_code = status.HTTP_404_NOT_FOUND
     elif isinstance(exc, DuplicateDocumentError):
         status_code = status.HTTP_409_CONFLICT
-    elif isinstance(exc, InvalidDocumentTypeError):
+    elif isinstance(exc, (InvalidDocumentTypeError, UnsupportedDocumentTypeError)):
         status_code = status.HTTP_400_BAD_REQUEST
     elif isinstance(exc, FileTooLargeError):
         status_code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
     elif isinstance(exc, UnauthorizedDocumentAccessError):
         status_code = status.HTTP_403_FORBIDDEN
+    elif isinstance(exc, (DocumentExtractionError, DocumentProcessingError)):
+        status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     else:
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 
     return JSONResponse(status_code=status_code, content={"detail": str(exc)})
+
 
 # Configure CORS Middleware
 origins = settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else [settings.CORS_ORIGINS]

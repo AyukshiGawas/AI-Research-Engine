@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { projectService } from '../services/projectService';
-import { FolderPlus, Layers, ShieldCheck, Database, Cpu, Activity, Clock, PlusCircle } from 'lucide-react';
+import { FolderPlus, Layers, ShieldCheck, Database, Activity, Clock, PlusCircle, FileText } from 'lucide-react';
 
 export const DashboardPage = () => {
   const { user } = useAuth();
@@ -19,7 +20,7 @@ export const DashboardPage = () => {
     setLoadingProjects(true);
     try {
       const data = await projectService.getProjects();
-      setProjects(data);
+      setProjects(data || []);
     } catch (err) {
       console.error('Error fetching projects:', err);
     } finally {
@@ -60,7 +61,7 @@ export const DashboardPage = () => {
   return (
     <div className="dashboard-view-container">
       {/* Welcome Banner */}
-      <div className="dashboard-welcome-banner glassmorphic-card">
+      <div className="dashboard-welcome-banner">
         <div className="banner-text">
           <h1 className="welcome-title">
             Welcome back, {user?.full_name || user?.username}!
@@ -77,7 +78,7 @@ export const DashboardPage = () => {
 
       {/* Metrics Row */}
       <div className="metrics-grid">
-        <div className="metric-card glassmorphic-card">
+        <div className="metric-card">
           <div className="metric-header">
             <span className="metric-title">Active Database</span>
             <Database className="metric-icon cyan" />
@@ -86,7 +87,7 @@ export const DashboardPage = () => {
           <div className="metric-status">SQLAlchemy + Alembic Migrations</div>
         </div>
 
-        <div className="metric-card glassmorphic-card">
+        <div className="metric-card">
           <div className="metric-header">
             <span className="metric-title">Authentication Protocol</span>
             <ShieldCheck className="metric-icon green" />
@@ -95,7 +96,7 @@ export const DashboardPage = () => {
           <div className="metric-status">In-Memory JWT Access Token (15m)</div>
         </div>
 
-        <div className="metric-card glassmorphic-card">
+        <div className="metric-card">
           <div className="metric-header">
             <span className="metric-title">Workspace Projects</span>
             <Layers className="metric-icon purple" />
@@ -104,7 +105,7 @@ export const DashboardPage = () => {
           <div className="metric-status">UUID Entities & Foreign Keys</div>
         </div>
 
-        <div className="metric-card glassmorphic-card">
+        <div className="metric-card">
           <div className="metric-header">
             <span className="metric-title">Engine Uptime</span>
             <Activity className="metric-icon orange" />
@@ -133,7 +134,7 @@ export const DashboardPage = () => {
             <span>Loading workspaces from PostgreSQL...</span>
           </div>
         ) : projects.length === 0 ? (
-          <div className="empty-projects-card glassmorphic-card">
+          <div className="empty-projects-card">
             <Layers className="empty-icon" size={48} />
             <h3>No Research Workspaces Yet</h3>
             <p>Create your first project workspace to start running multi-agent AI research tasks.</p>
@@ -145,7 +146,7 @@ export const DashboardPage = () => {
         ) : (
           <div className="projects-grid">
             {projects.map((proj) => (
-              <div key={proj.id} className="project-card glassmorphic-card">
+              <div key={proj.id} className="project-card">
                 <div className="project-card-header">
                   <span className="status-badge active">{proj.status}</span>
                   <span className="project-date">
@@ -156,8 +157,10 @@ export const DashboardPage = () => {
                 <h3 className="project-name">{proj.name}</h3>
                 <p className="project-desc">{proj.description || 'No description provided.'}</p>
                 <div className="project-card-footer">
-                  <span className="project-id-badge">ID: {proj.id.substring(0, 8)}...</span>
-                  <span className="phase-pill">Ready</span>
+                  <Link to={`/projects/${proj.id}/documents`} className="btn-primary-glow compact-link">
+                    <FileText size={14} />
+                    <span>Documents Workspace</span>
+                  </Link>
                 </div>
               </div>
             ))}
@@ -168,7 +171,7 @@ export const DashboardPage = () => {
       {/* Modal for Creating New Workspace */}
       {showModal && (
         <div className="modal-backdrop">
-          <div className="modal-content glassmorphic-card">
+          <div className="modal-content">
             <h3 className="modal-title">Create Research Workspace</h3>
             <p className="modal-subtitle">Define a new project context for your research team</p>
 

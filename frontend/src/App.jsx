@@ -7,6 +7,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { DocumentWorkspacePage } from './pages/Documents/DocumentWorkspacePage';
 import './index.css';
 
 export function App() {
@@ -30,6 +31,7 @@ export function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="projects/:projectId/documents" element={<DocumentWorkspacePage />} />
           </Route>
 
           {/* Catch-all redirect */}

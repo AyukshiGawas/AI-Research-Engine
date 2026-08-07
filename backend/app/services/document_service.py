@@ -35,6 +35,7 @@ from app.models.document import Document, DocumentStatus
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.project_repository import ProjectRepository
 from app.services.audit_service import AuditService
+from app.services.document_processor_service import DocumentProcessorService
 from app.validators.document_validator import (
     DocumentValidationError,
     read_upload_bytes,
@@ -232,7 +233,11 @@ class DocumentService:
             f"DOCUMENT | uploaded | id={document_id} | project={project_id} "
             f"| file={original_filename} | size={len(data)}"
         )
-        return created
+
+        # Trigger document processing pipeline (UPLOADED -> PROCESSING -> PROCESSED/FAILED)
+        processor = DocumentProcessorService(self.db)
+        return await processor.process_document(created.id)
+
 
     async def list_documents(
         self, project_id: uuid.UUID, requester_id: uuid.UUID
@@ -338,3 +343,31 @@ class DocumentService:
             f"DOCUMENT | deleted | id={document_id} | project={project_id} "
             f"| file={original_filename}"
         )
+
+    async def process_document(
+        self,
+        project_id: uuid.UUID,
+        document_id: uuid.UUID,
+        requester_id: uuid.UUID,
+    ) -> Document:
+        """Trigger document text extraction processing for an existing document.
+
+        Args:
+            project_id: Target project workspace UUID.
+            document_id: Target document UUID.
+            requester_id: Authenticated user UUID (ownership check).
+
+        Returns:
+            Updated Document ORM instance.
+
+        Raises:
+            DocumentNotFoundError: Document not found in this project.
+        """
+        await self._assert_project_ownership(project_id, requester_id)
+        document = await self.doc_repo.get_by_id_and_project(document_id, project_id)
+        if not document:
+            raise DocumentNotFoundError("Document not found in this project workspace.")
+
+        processor = DocumentProcessorService(self.db)
+        return await processor.process_document(document.id)
+

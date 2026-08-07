@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, String, UUID
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -68,6 +68,15 @@ class Document(Base):
         nullable=False,
         index=True,
     )
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    word_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -82,3 +91,4 @@ class Document(Base):
 
     project: Mapped["Project"] = relationship("Project", back_populates="documents")
     uploaded_by_user: Mapped["User | None"] = relationship("User", back_populates="documents")
+

@@ -18,9 +18,15 @@ def test_document_model_exposes_requested_schema_fields() -> None:
         "extension",
         "file_size",
         "status",
+        "processed_at",
+        "extracted_text",
+        "processing_error",
+        "page_count",
+        "word_count",
         "created_at",
         "updated_at",
     }
+
 
     assert expected_columns <= columns
     assert DocumentStatus.UPLOADED.value == "UPLOADED"

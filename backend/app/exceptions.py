@@ -29,3 +29,16 @@ class StorageFailureError(AppException):
 
 class UnauthorizedDocumentAccessError(AppException):
     """Raised when the caller does not have access to the document project."""
+
+
+class DocumentProcessingError(AppException):
+    """Raised when an error occurs during document processing."""
+
+
+class UnsupportedDocumentTypeError(AppException):
+    """Raised when a document type is unsupported for text extraction."""
+
+
+class DocumentExtractionError(AppException):
+    """Raised when text extraction fails for a document."""
+

@@ -31,6 +31,12 @@ class DocumentRead(BaseModel):
 
     status: DocumentStatus
 
+    processed_at: Optional[datetime] = None
+    extracted_text: Optional[str] = None
+    processing_error: Optional[str] = None
+    page_count: Optional[int] = None
+    word_count: Optional[int] = None
+
     created_at: datetime
     updated_at: datetime
 
@@ -45,7 +51,20 @@ class DocumentUploadResponse(BaseModel):
     message: str = "Document uploaded successfully."
 
 
+class DocumentProcessResponse(BaseModel):
+    """Response returned when triggering document processing."""
+
+    id: uuid.UUID
+    status: DocumentStatus
+    processed_at: Optional[datetime] = None
+    word_count: Optional[int] = None
+    page_count: Optional[int] = None
+    processing_error: Optional[str] = None
+    message: str = "Document processing completed."
+
+
 class DocumentDeleteResponse(BaseModel):
     """Confirmation payload returned after a document is deleted."""
 
     message: str = "Document deleted successfully."
+

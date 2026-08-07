@@ -1,12 +1,12 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, User, FolderKanban, ShieldCheck, Database, Layers } from 'lucide-react';
+import { LayoutDashboard, User, FolderKanban, ShieldCheck, FileText } from 'lucide-react';
 
 export const Sidebar = () => {
   return (
     <aside className="enterprise-sidebar">
       <div className="sidebar-section">
-        <h4 className="sidebar-section-title">Workspace</h4>
+        <h4 className="sidebar-section-title">Workspace Navigation</h4>
         <nav className="sidebar-nav">
           <NavLink
             to="/dashboard"
@@ -29,15 +29,18 @@ export const Sidebar = () => {
       <div className="sidebar-section">
         <h4 className="sidebar-section-title">Engine Features</h4>
         <div className="sidebar-nav">
-          <div className="sidebar-link disabled">
+          <NavLink
+            to="/dashboard"
+            className="sidebar-link"
+          >
             <FolderKanban className="sidebar-icon" />
-            <span>Projects & Datasets</span>
+            <span>Research Workspaces</span>
             <span className="badge-pill">Phase 2</span>
-          </div>
-          <div className="sidebar-link disabled">
-            <Layers className="sidebar-icon" />
-            <span>Multi-Agent Research</span>
-            <span className="badge-pill upcoming">Phase 3</span>
+          </NavLink>
+          <div className="sidebar-link active-feature">
+            <FileText className="sidebar-icon" />
+            <span>Document Workspace</span>
+            <span className="badge-pill active">Phase 3</span>
           </div>
         </div>
       </div>

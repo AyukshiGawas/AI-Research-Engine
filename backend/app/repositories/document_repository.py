@@ -4,8 +4,10 @@ All SQL interactions are isolated here.  Services call this layer; no raw
 SQLAlchemy expressions should appear in service or endpoint code.
 """
 
+from datetime import datetime
 import uuid
 from typing import List, Optional
+
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -111,6 +113,56 @@ class DocumentRepository:
         await self.db.refresh(document)
         return document
 
+    async def update_processing_success(
+        self,
+        document: Document,
+        extracted_text: str,
+        page_count: Optional[int],
+        word_count: Optional[int],
+        processed_at: datetime,
+    ) -> Document:
+        """Update document record with extracted text and processing metadata on success.
+
+        Args:
+            document: Document ORM instance to update.
+            extracted_text: Extracted plain text string.
+            page_count: Extracted page count (if applicable).
+            word_count: Extracted word count.
+            processed_at: Timestamp when processing completed.
+
+        Returns:
+            Updated Document instance.
+        """
+        document.status = DocumentStatus.PROCESSED
+        document.extracted_text = extracted_text
+        document.page_count = page_count
+        document.word_count = word_count
+        document.processed_at = processed_at
+        document.processing_error = None
+        await self.db.flush()
+        await self.db.refresh(document)
+        return document
+
+    async def update_processing_failure(
+        self,
+        document: Document,
+        error_message: str,
+    ) -> Document:
+        """Update document record with error details on processing failure.
+
+        Args:
+            document: Document ORM instance to update.
+            error_message: Detailed error string describing extraction failure.
+
+        Returns:
+            Updated Document instance.
+        """
+        document.status = DocumentStatus.FAILED
+        document.processing_error = error_message
+        await self.db.flush()
+        await self.db.refresh(document)
+        return document
+
     async def delete(self, document: Document) -> None:
         """Delete a document record from the database.
 
@@ -119,3 +171,4 @@ class DocumentRepository:
         """
         await self.db.delete(document)
         await self.db.flush()
+

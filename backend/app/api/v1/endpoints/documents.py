@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.dependencies.auth import get_current_active_user
 from app.models.user import User
-from app.schemas.document import DocumentDeleteResponse, DocumentRead, DocumentUploadResponse
+from app.schemas.document import (
+    DocumentDeleteResponse,
+    DocumentProcessResponse,
+    DocumentRead,
+    DocumentUploadResponse,
+)
 from app.services.document_service import DocumentService
 
 router = APIRouter()
@@ -54,6 +59,30 @@ async def upload_document(
         original_filename=document.original_filename,
         file_size=document.file_size,
         status=document.status,
+    )
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/process",
+    response_model=DocumentProcessResponse,
+    summary="Trigger or re-trigger document text extraction processing",
+)
+async def process_document(
+    project_id: uuid.UUID,
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> DocumentProcessResponse:
+    """Extract text and metadata from an uploaded research document."""
+    document_service = DocumentService(db)
+    document = await document_service.process_document(project_id, document_id, current_user.id)
+    return DocumentProcessResponse(
+        id=document.id,
+        status=document.status,
+        processed_at=document.processed_at,
+        word_count=document.word_count,
+        page_count=document.page_count,
+        processing_error=document.processing_error,
     )
 
 
@@ -135,3 +164,4 @@ async def delete_document(
         user_agent=request.headers.get("user-agent"),
     )
     return DocumentDeleteResponse()
+
