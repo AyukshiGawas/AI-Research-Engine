@@ -6,5 +6,6 @@ from app.models.refresh_token import RefreshToken
 from app.models.project import Project
 from app.models.audit_log import AuditLog
 from app.models.document import Document
+from app.models.document_chunk import DocumentChunk
 
-__all__ = ["Base", "User", "RefreshToken", "Project", "AuditLog", "Document"]
+__all__ = ["Base", "User", "RefreshToken", "Project", "AuditLog", "Document", "DocumentChunk"]

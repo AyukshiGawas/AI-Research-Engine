@@ -15,12 +15,16 @@ from app.db.session import get_db
 from app.dependencies.auth import get_current_active_user
 from app.models.user import User
 from app.schemas.document import (
+    ChunkListResponse,
+    ChunkRead,
     DocumentDeleteResponse,
     DocumentProcessResponse,
     DocumentRead,
     DocumentUploadResponse,
 )
+from app.services.chunking_service import ChunkingService
 from app.services.document_service import DocumentService
+from app.services.embedding_service import EmbeddingService
 
 router = APIRouter()
 
@@ -165,3 +169,63 @@ async def delete_document(
     )
     return DocumentDeleteResponse()
 
+
+@router.get(
+    "/{project_id}/documents/{document_id}/chunks",
+    response_model=ChunkListResponse,
+    summary="List all text chunks for a processed document",
+)
+async def list_chunks(
+    project_id: uuid.UUID,
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> ChunkListResponse:
+    """Return all text chunks and their embedding metadata for a single document.
+
+    The document must belong to a project owned by the authenticated user.
+    """
+    document_service = DocumentService(db)
+    # Ownership + existence check via existing service method
+    await document_service.get_document(project_id, document_id, current_user.id)
+
+    from app.repositories.chunk_repository import ChunkRepository
+    chunk_repo = ChunkRepository(db)
+    chunks = await chunk_repo.get_by_document(document_id)
+    return ChunkListResponse(
+        document_id=document_id,
+        total_chunks=len(chunks),
+        chunks=[ChunkRead.model_validate(c) for c in chunks],
+    )
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/chunk",
+    response_model=ChunkListResponse,
+    summary="Re-trigger chunking and embedding for a processed document",
+)
+async def rechunk_document(
+    project_id: uuid.UUID,
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> ChunkListResponse:
+    """Re-run the chunking and embedding pipeline for an already-processed document.
+
+    Useful after changing chunk size/overlap settings or the embedding model.
+    Existing chunks for the document are deleted before new ones are created.
+    """
+    document_service = DocumentService(db)
+    await document_service.get_document(project_id, document_id, current_user.id)
+
+    chunking_svc = ChunkingService(db)
+    chunks = await chunking_svc.chunk_document(document_id)
+
+    embedding_svc = EmbeddingService(db)
+    chunks = await embedding_svc.embed_document(document_id)
+
+    return ChunkListResponse(
+        document_id=document_id,
+        total_chunks=len(chunks),
+        chunks=[ChunkRead.model_validate(c) for c in chunks],
+    )

@@ -1,11 +1,21 @@
 import React from 'react';
-import { Download, Trash2 } from 'lucide-react';
+import { Download, Trash2, Layers } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { formatDate, formatFileSize } from '../../utils/formatters';
 
-export const DocumentRow = ({ document, onDownload, onDelete, deleting, downloading }) => {
+export const DocumentRow = ({
+  document,
+  onDownload,
+  onDelete,
+  onViewChunks,
+  deleting,
+  downloading,
+  isActive,
+}) => {
+  const isProcessed = document.status === 'PROCESSED';
+
   return (
-    <tr className="document-table-row">
+    <tr className={`document-table-row ${isActive ? 'row-active' : ''}`}>
       <td className="col-filename">
         <span className="document-filename" title={document.original_filename}>
           {document.original_filename}
@@ -18,6 +28,17 @@ export const DocumentRow = ({ document, onDownload, onDelete, deleting, download
       </td>
       <td className="col-actions">
         <div className="table-actions-group">
+          {isProcessed && (
+            <button
+              type="button"
+              className="btn-action-icon active-accent"
+              onClick={() => onViewChunks(document)}
+              aria-label={`View chunks for ${document.original_filename}`}
+              title="View text chunks and embeddings"
+            >
+              <Layers size={16} />
+            </button>
+          )}
           <button
             type="button"
             className="btn-action-icon"
@@ -43,3 +64,4 @@ export const DocumentRow = ({ document, onDownload, onDelete, deleting, download
     </tr>
   );
 };
+

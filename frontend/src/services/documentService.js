@@ -84,7 +84,30 @@ export const documentService = {
     return response.data;
   },
 
+  /**
+   * Fetch all text chunks and metadata for a document.
+   * @param {string} projectId
+   * @param {string} documentId
+   * @returns {Promise<object>}
+   */
+  async getChunks(projectId, documentId) {
+    const response = await api.get(`/projects/${projectId}/documents/${documentId}/chunks`);
+    return response.data;
+  },
+
+  /**
+   * Trigger re-chunking and re-embedding for a document.
+   * @param {string} projectId
+   * @param {string} documentId
+   * @returns {Promise<object>}
+   */
+  async rechunkDocument(projectId, documentId) {
+    const response = await api.post(`/projects/${projectId}/documents/${documentId}/chunk`);
+    return response.data;
+  },
+
   getMaxFileSizeBytes() {
     return MAX_FILE_SIZE_BYTES;
   },
 };
+

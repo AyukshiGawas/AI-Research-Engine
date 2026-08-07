@@ -31,3 +31,15 @@ build/
 # Local SQLite databases
 backend/*.db
 backend/*.sqlite3
+
+# Uploaded documents
+backend/uploads/
+
+# SQLite database
+backend/test_ai_research.db
+
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/ 

@@ -67,6 +67,30 @@ class Settings(BaseSettings):
         description="Permitted file extensions for document uploads",
     )
 
+    # Phase 5: Document Chunking Settings
+    CHUNK_SIZE: int = Field(
+        default=1000,
+        description="Target character count per text chunk (sliding window)",
+    )
+    CHUNK_OVERLAP: int = Field(
+        default=200,
+        description="Number of overlapping characters between consecutive chunks",
+    )
+
+    # Phase 6: Embedding Settings
+    EMBEDDING_PROVIDER: str = Field(
+        default="local",
+        description="Embedding provider: 'local' (sentence-transformers) or 'openai'",
+    )
+    EMBEDDING_MODEL: str = Field(
+        default="all-MiniLM-L6-v2",
+        description="Embedding model name (sentence-transformers model or OpenAI model)",
+    )
+    OPENAI_API_KEY: str = Field(
+        default="",
+        description="OpenAI API key (required when EMBEDDING_PROVIDER=openai)",
+    )
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

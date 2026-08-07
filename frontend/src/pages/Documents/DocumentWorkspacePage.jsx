@@ -8,6 +8,7 @@ import { UploadProgress } from '../../components/documents/UploadProgress';
 import { DocumentTable } from '../../components/documents/DocumentTable';
 import { EmptyState } from '../../components/documents/EmptyState';
 import { DeleteDialog } from '../../components/documents/DeleteDialog';
+import { ChunkViewer } from '../../components/documents/ChunkViewer';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 
 export const DocumentWorkspacePage = () => {
@@ -15,6 +16,7 @@ export const DocumentWorkspacePage = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(null);
   const [uploadInputError, setUploadInputError] = useState(null);
+  const [activeChunkDoc, setActiveChunkDoc] = useState(null);
 
   const {
     documents,
@@ -64,7 +66,18 @@ export const DocumentWorkspacePage = () => {
     if (!deleteTarget) return;
     const success = await deleteDocument(deleteTarget.id);
     if (success) {
+      if (activeChunkDoc?.id === deleteTarget.id) {
+        setActiveChunkDoc(null);
+      }
       setDeleteTarget(null);
+    }
+  };
+
+  const handleViewChunks = (doc) => {
+    if (activeChunkDoc?.id === doc.id) {
+      setActiveChunkDoc(null);
+    } else {
+      setActiveChunkDoc(doc);
     }
   };
 
@@ -135,6 +148,8 @@ export const DocumentWorkspacePage = () => {
                 documents={documents}
                 onDownload={downloadDocument}
                 onDelete={(id) => setDeleteTarget(documents.find((doc) => doc.id === id))}
+                onViewChunks={handleViewChunks}
+                activeDocumentId={activeChunkDoc?.id}
                 deletingId={deletingId}
                 downloadingId={downloadingId}
               />
@@ -142,6 +157,17 @@ export const DocumentWorkspacePage = () => {
           </div>
         </section>
       </div>
+
+      {/* Chunk Viewer Drawer / Section */}
+      {activeChunkDoc && (
+        <section className="chunk-viewer-section">
+          <ChunkViewer
+            projectId={projectId}
+            document={activeChunkDoc}
+            onClose={() => setActiveChunkDoc(null)}
+          />
+        </section>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <DeleteDialog
@@ -155,3 +181,4 @@ export const DocumentWorkspacePage = () => {
     </div>
   );
 };
+

@@ -68,3 +68,31 @@ class DocumentDeleteResponse(BaseModel):
 
     message: str = "Document deleted successfully."
 
+
+class ChunkRead(BaseModel):
+    """Single document chunk metadata returned by the API.
+
+    The embedding field is omitted from list responses to keep payload size small;
+    callers can retrieve it per-chunk if needed.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    document_id: uuid.UUID
+    chunk_index: int
+    chunk_text: str
+    chunk_size: int
+    start_char: int
+    end_char: int
+    embedding_model: Optional[str] = None
+    embedding_generated_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class ChunkListResponse(BaseModel):
+    """Paginated list of chunks with summary statistics."""
+
+    document_id: uuid.UUID
+    total_chunks: int
+    chunks: list[ChunkRead]

@@ -24,9 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import logger
 from app.core.storage import storage_provider
 from app.exceptions import (
+    ChunkingError,
     DocumentExtractionError,
     DocumentNotFoundError,
     DocumentProcessingError,
+    EmbeddingError,
     UnsupportedDocumentTypeError,
 )
 from app.models.document import Document, DocumentStatus
@@ -87,6 +89,37 @@ class DocumentProcessorService:
                 f"DOCUMENT PROCESSOR | Status updated to PROCESSED | id={document.id} | "
                 f"words={result.word_count} | pages={result.page_count}"
             )
+
+            # Phase 5: Chunk the extracted text
+            try:
+                from app.services.chunking_service import ChunkingService
+                chunking_svc = ChunkingService(self.db)
+                chunks = await chunking_svc.chunk_document(document.id)
+                logger.info(
+                    f"DOCUMENT PROCESSOR | Chunking complete | id={document.id} | "
+                    f"chunks={len(chunks)}"
+                )
+            except (ChunkingError, DocumentProcessingError) as chunk_exc:
+                logger.warning(
+                    f"DOCUMENT PROCESSOR | Chunking failed (document stays PROCESSED) | "
+                    f"id={document.id} | error={chunk_exc}"
+                )
+                return updated_doc
+
+            # Phase 6: Generate embeddings for each chunk
+            try:
+                from app.services.embedding_service import EmbeddingService
+                embedding_svc = EmbeddingService(self.db)
+                await embedding_svc.embed_document(document.id)
+                logger.info(
+                    f"DOCUMENT PROCESSOR | Embedding complete | id={document.id}"
+                )
+            except EmbeddingError as emb_exc:
+                logger.warning(
+                    f"DOCUMENT PROCESSOR | Embedding failed (document stays PROCESSED) | "
+                    f"id={document.id} | error={emb_exc}"
+                )
+
             return updated_doc
 
         except (UnsupportedDocumentTypeError, DocumentExtractionError, DocumentProcessingError) as exc:

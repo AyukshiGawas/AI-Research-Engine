@@ -9,6 +9,12 @@ export const StatusBadge = ({ status }) => {
     variant = 'status-failed';
   } else if (normalized === DOCUMENT_STATUS.PROCESSING) {
     variant = 'status-processing';
+  } else if (normalized === DOCUMENT_STATUS.PROCESSED) {
+    variant = 'status-processed';
+  } else if (normalized === DOCUMENT_STATUS.CHUNKED) {
+    variant = 'status-chunked';
+  } else if (normalized === DOCUMENT_STATUS.EMBEDDED) {
+    variant = 'status-embedded';
   }
 
   return (

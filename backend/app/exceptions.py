@@ -42,3 +42,11 @@ class UnsupportedDocumentTypeError(AppException):
 class DocumentExtractionError(AppException):
     """Raised when text extraction fails for a document."""
 
+
+class ChunkingError(AppException):
+    """Raised when document text chunking fails."""
+
+
+class EmbeddingError(AppException):
+    """Raised when embedding generation fails for a document chunk."""
+
