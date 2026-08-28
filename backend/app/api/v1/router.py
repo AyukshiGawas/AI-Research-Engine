@@ -6,6 +6,7 @@ from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.documents import router as documents_router
 from app.api.v1.endpoints.health import root_router, versioned_router
 from app.api.v1.endpoints.projects import router as projects_router
+from app.api.v1.endpoints.search import router as search_router
 from app.api.v1.endpoints.users import router as users_router
 from app.api.v1.endpoints.version import router as version_router
 
@@ -23,3 +24,6 @@ api_router.include_router(projects_router, prefix="/api/v1/projects", tags=["pro
 
 # Phase 3: Document management endpoints (nested under /projects)
 api_router.include_router(documents_router, prefix="/api/v1/projects", tags=["documents"])
+
+# Phase 7: Semantic search
+api_router.include_router(search_router, prefix="/api/v1", tags=["search"])

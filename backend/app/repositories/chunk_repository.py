@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.models.document_chunk import DocumentChunk
 
@@ -104,3 +105,22 @@ class ChunkRepository:
         await self.db.flush()
         await self.db.refresh(chunk)
         return chunk
+
+    async def get_all_with_embeddings(self) -> List[DocumentChunk]:
+        """Return all chunks that have a stored embedding vector.
+
+        Eagerly loads the parent Document so callers can access
+        ``chunk.document.original_filename`` without extra queries.
+
+        Returns:
+            List of DocumentChunk ORM instances ordered by document_id, then
+            chunk_index.  Chunks whose embedding column is NULL are excluded.
+        """
+        stmt = (
+            select(DocumentChunk)
+            .where(DocumentChunk.embedding.is_not(None))
+            .options(joinedload(DocumentChunk.document))
+            .order_by(DocumentChunk.document_id, DocumentChunk.chunk_index)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.unique().scalars().all())

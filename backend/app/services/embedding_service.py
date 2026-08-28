@@ -95,6 +95,37 @@ class EmbeddingService:
         )
         return updated
 
+    async def embed_query(self, query: str) -> List[float]:
+        """Convert a single query string into an embedding vector.
+
+        Uses the same provider and model configuration as ``embed_document``
+        so query vectors are compatible with stored chunk vectors.
+
+        Args:
+            query: Natural-language search query string.
+
+        Returns:
+            Embedding vector as a list of floats.
+
+        Raises:
+            EmbeddingError: Provider is misconfigured or embedding failed.
+        """
+        provider = settings.EMBEDDING_PROVIDER.lower()
+        try:
+            if provider == "openai":
+                vectors = await self._embed_openai([query])
+            else:
+                vectors = self._embed_local([query])
+        except Exception as exc:
+            logger.error(
+                f"EMBEDDING | Query embed error | provider={provider} | error={exc}"
+            )
+            raise EmbeddingError(
+                f"Query embedding generation failed: {exc}"
+            ) from exc
+
+        return vectors[0]
+
     def _embed_local(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings using sentence-transformers (local, CPU/GPU).
 
