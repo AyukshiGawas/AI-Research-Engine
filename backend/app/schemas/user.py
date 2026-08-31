@@ -68,3 +68,28 @@ class UserUpdate(BaseModel):
         if value is not None:
             return UserCreate.validate_password_complexity(value)
         return value
+
+
+VALID_ROLES = {"admin", "researcher", "analyst"}
+
+
+class UserStatusUpdate(BaseModel):
+    """Schema for updating a user's active/inactive status."""
+
+    is_active: bool = Field(..., description="Whether the user account is active")
+
+
+class UserRoleUpdate(BaseModel):
+    """Schema for updating a user's authorization role."""
+
+    role: str = Field(..., description="Assigned user role ('admin', 'researcher', 'analyst')")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        role_clean = value.strip().lower()
+        if role_clean not in VALID_ROLES:
+            raise ValueError(
+                f"Invalid role '{value}'. Supported roles: {', '.join(sorted(VALID_ROLES))}"
+            )
+        return role_clean

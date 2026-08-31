@@ -48,6 +48,12 @@ class UserRepository:
         await self.db.refresh(user)
         return user
 
+    async def get_all(self, skip: int = 0, limit: int = 100) -> list[User]:
+        """Fetch paginated list of users ordered by creation date."""
+        stmt = select(User).order_by(User.created_at.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
     async def update_last_login(self, user_id: uuid.UUID) -> None:
         """Update last login timestamp for user."""
         user = await self.get_by_id(user_id)
