@@ -1,10 +1,12 @@
-"""Phase 8 — AI Research Chat (RAG) tests.
+"""Phase 8 & Phase 9 — AI Research Chat (RAG) with Citations & Sources tests.
 
 Covers:
   Unit:
     - ChatService.answer_question() rejects empty or whitespace-only questions.
     - ChatService.answer_question() returns fallback message when no relevant chunks found.
-    - ChatService.answer_question() builds structured prompt and generates completion.
+    - ChatService.answer_question() assigns stable 1-indexed citation numbers [1], [2] to sources.
+    - ChatService.answer_question() builds structured prompt with strict citation rules.
+    - ChatService.answer_question() generates completion with inline citations.
     - ChatService.answer_question() raises ChatError when OPENAI_API_KEY is missing.
     - ChatService.answer_question() raises ChatError when OpenAI call fails.
     - ChatService.answer_question() propagates EmbeddingError from SearchService.
@@ -15,9 +17,9 @@ Covers:
     - POST /api/v1/chat returns 422 for whitespace-only question.
     - POST /api/v1/chat returns 422 for top_k < 1 or top_k > 50.
     - POST /api/v1/chat returns 200 with fallback answer and empty sources when no chunks indexed.
-    - POST /api/v1/chat returns 200 with generated answer and source chunks on success.
+    - POST /api/v1/chat returns 200 with generated answer containing inline citations and structured sources.
+    - POST /api/v1/chat verifies stable citation numbering [1], [2] and metadata consistency across multiple sources.
     - POST /api/v1/chat returns 503 when OpenAI API key is missing or OpenAI fails.
-    - POST /api/v1/chat returns 503 when embedding service fails.
 """
 
 import json
@@ -33,6 +35,7 @@ from app.models.document import Document, DocumentStatus
 from app.models.document_chunk import DocumentChunk
 from app.models.project import Project
 from app.models.user import User
+from app.schemas.chat import CitationSourceItem
 from app.schemas.search import SearchResultItem
 from app.services.chat_service import ChatService
 
@@ -142,31 +145,83 @@ class TestChatServiceNoChunks:
         assert sources == []
 
 
-class TestChatServicePromptAndGeneration:
+class TestChatServicePromptAndCitations:
     @pytest.mark.asyncio
-    async def test_build_prompt_structure(self, db_session: AsyncSession):
+    async def test_build_prompt_structure_and_citation_instructions(self, db_session: AsyncSession):
         svc = ChatService(db_session)
         sample_sources = [
-            SearchResultItem(
+            CitationSourceItem(
+                citation_number=1,
                 document_id=uuid.uuid4(),
                 chunk_id=uuid.uuid4(),
                 chunk_index=0,
                 chunk_text="Qubits can exist in superposition.",
                 similarity_score=0.95,
                 filename="quantum_intro.pdf",
-            )
+            ),
+            CitationSourceItem(
+                citation_number=2,
+                document_id=uuid.uuid4(),
+                chunk_id=uuid.uuid4(),
+                chunk_index=1,
+                chunk_text="Entanglement connects qubits across distances.",
+                similarity_score=0.89,
+                filename="quantum_entangle.pdf",
+            ),
         ]
         messages = svc._build_prompt("How do qubits work?", sample_sources)
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
-        assert "research assistant" in messages[0]["content"].lower()
+        assert "Citation Rules:" in messages[0]["content"]
+        assert "[1]" in messages[0]["content"]
+        assert "Never invent or hallucinate citations" in messages[0]["content"]
+
         assert messages[1]["role"] == "user"
-        assert "quantum_intro.pdf" in messages[1]["content"]
+        assert "[1] Source: quantum_intro.pdf (Chunk 0)" in messages[1]["content"]
         assert "Qubits can exist in superposition." in messages[1]["content"]
-        assert "How do qubits work?" in messages[1]["content"]
+        assert "[2] Source: quantum_entangle.pdf (Chunk 1)" in messages[1]["content"]
+        assert "Entanglement connects qubits across distances." in messages[1]["content"]
+        assert "Question: How do qubits work?" in messages[1]["content"]
+        assert "Answer (with inline citations [1], [2], etc.):" in messages[1]["content"]
 
     @pytest.mark.asyncio
-    async def test_answer_question_successful_flow(self, db_session: AsyncSession):
+    async def test_answer_question_assigns_stable_citation_numbers(self, db_session: AsyncSession):
+        svc = ChatService(db_session)
+        doc_id = uuid.uuid4()
+        raw_results = [
+            SearchResultItem(
+                document_id=doc_id,
+                chunk_id=uuid.uuid4(),
+                chunk_index=0,
+                chunk_text="First chunk text",
+                similarity_score=0.95,
+                filename="doc1.txt",
+            ),
+            SearchResultItem(
+                document_id=doc_id,
+                chunk_id=uuid.uuid4(),
+                chunk_index=1,
+                chunk_text="Second chunk text",
+                similarity_score=0.85,
+                filename="doc1.txt",
+            ),
+        ]
+
+        mock_completion = "First statement [1]. Second statement [2]."
+
+        with patch.object(svc.search_svc, "search", new=AsyncMock(return_value=raw_results)), \
+             patch.object(svc, "_generate_completion", new=AsyncMock(return_value=mock_completion)):
+            answer, sources = await svc.answer_question("Question?", top_k=2)
+
+        assert answer == mock_completion
+        assert len(sources) == 2
+        assert sources[0].citation_number == 1
+        assert sources[0].chunk_text == "First chunk text"
+        assert sources[1].citation_number == 2
+        assert sources[1].chunk_text == "Second chunk text"
+
+    @pytest.mark.asyncio
+    async def test_answer_question_successful_flow_with_citations(self, db_session: AsyncSession):
         user = await _make_user(db_session, "chat_flow@example.com")
         project = await _make_project(db_session, user.id)
         doc = await _make_document(db_session, project.id, user.id)
@@ -184,7 +239,7 @@ class TestChatServicePromptAndGeneration:
             )
         ]
 
-        mock_completion_text = "Qubits enable quantum superposition."
+        mock_completion_text = "Qubits enable quantum superposition [1]."
 
         with patch.object(svc.search_svc, "search", new=AsyncMock(return_value=sample_results)), \
              patch.object(svc, "_generate_completion", new=AsyncMock(return_value=mock_completion_text)):
@@ -192,6 +247,7 @@ class TestChatServicePromptAndGeneration:
 
         assert answer == mock_completion_text
         assert len(sources) == 1
+        assert sources[0].citation_number == 1
         assert sources[0].chunk_id == chunk.id
         assert sources[0].filename == doc.original_filename
 
@@ -344,7 +400,7 @@ class TestChatEndpointExecution:
         assert data["sources"] == []
 
     @pytest.mark.asyncio
-    async def test_chat_returns_answer_and_sources_on_success(
+    async def test_chat_returns_answer_with_citations_and_structured_sources(
         self, client: AsyncClient, db_session: AsyncSession
     ):
         user = await _make_user(db_session, "chat_success@example.com")
@@ -363,7 +419,7 @@ class TestChatEndpointExecution:
         app.dependency_overrides[get_current_active_user] = lambda: user
 
         mock_choice = MagicMock()
-        mock_choice.message.content = "Quantum teleportation is the transmission of qubit states."
+        mock_choice.message.content = "Quantum teleportation is the transmission of qubit states [1]."
         mock_response = MagicMock()
         mock_response.choices = [mock_choice]
 
@@ -392,12 +448,65 @@ class TestChatEndpointExecution:
         assert response.status_code == 200
         data = response.json()
         assert data["question"] == "What is quantum teleportation?"
-        assert data["answer"] == "Quantum teleportation is the transmission of qubit states."
+        assert data["answer"] == "Quantum teleportation is the transmission of qubit states [1]."
         assert len(data["sources"]) == 1
-        assert data["sources"][0]["document_id"] == str(doc.id)
-        assert data["sources"][0]["chunk_id"] == str(chunk.id)
-        assert data["sources"][0]["filename"] == "quantum.txt"
-        assert data["sources"][0]["similarity_score"] > 0.9
+        src = data["sources"][0]
+        assert src["citation_number"] == 1
+        assert src["document_id"] == str(doc.id)
+        assert src["chunk_id"] == str(chunk.id)
+        assert src["chunk_index"] == 0
+        assert src["filename"] == "quantum.txt"
+        assert src["chunk_text"] == "Quantum teleportation transmits qubit states."
+        assert src["similarity_score"] > 0.9
+
+    @pytest.mark.asyncio
+    async def test_chat_multiple_sources_citation_consistency(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        user = await _make_user(db_session, "chat_multi@example.com")
+        project = await _make_project(db_session, user.id)
+        doc1 = await _make_document(db_session, project.id, user.id, filename="doc_a.txt")
+        chunk1 = await _make_chunk(db_session, doc1.id, 0, text="First topic text.", embedding=[1.0, 0.0])
+        chunk2 = await _make_chunk(db_session, doc1.id, 1, text="Second topic text.", embedding=[0.8, 0.6])
+
+        from app.dependencies.auth import get_current_active_user
+        from app.main import app
+        app.dependency_overrides[get_current_active_user] = lambda: user
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "According to source [1], first topic holds. Source [2] confirms second topic."
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+
+        mock_openai = MagicMock()
+        mock_client_instance = MagicMock()
+        mock_client_instance.chat.completions.create = AsyncMock(return_value=mock_response)
+        mock_openai.AsyncOpenAI.return_value = mock_client_instance
+
+        try:
+            with patch(
+                "app.services.search_service.EmbeddingService.embed_query",
+                new_callable=AsyncMock,
+                return_value=[1.0, 0.0],
+            ), patch("app.services.chat_service.settings") as mock_settings, \
+               patch.dict("sys.modules", {"openai": mock_openai}):
+                mock_settings.OPENAI_API_KEY = "sk-test-key-12345"
+                mock_settings.CHAT_MODEL = "gpt-4o-mini"
+
+                response = await client.post(
+                    "/api/v1/chat",
+                    json={"question": "Compare topics", "top_k": 2},
+                )
+        finally:
+            app.dependency_overrides.pop(get_current_active_user, None)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["sources"]) == 2
+        assert data["sources"][0]["citation_number"] == 1
+        assert data["sources"][1]["citation_number"] == 2
+        assert data["sources"][0]["chunk_id"] == str(chunk1.id)
+        assert data["sources"][1]["chunk_id"] == str(chunk2.id)
 
     @pytest.mark.asyncio
     async def test_chat_missing_api_key_returns_503(

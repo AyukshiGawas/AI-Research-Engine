@@ -1,10 +1,9 @@
-"""Pydantic schemas for Phase 8: AI Research Chat (RAG)."""
+"""Pydantic schemas for Phase 8 & Phase 9: AI Research Chat (RAG) with Citations."""
 
-from typing import List
+import uuid
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
-
-from app.schemas.search import SearchResultItem
 
 
 class ChatRequest(BaseModel):
@@ -32,9 +31,25 @@ class ChatRequest(BaseModel):
         return v.strip()
 
 
+class CitationSourceItem(BaseModel):
+    """Structured citation source chunk item for RAG chat responses."""
+
+    citation_number: int = Field(
+        ...,
+        ge=1,
+        description="Stable 1-indexed citation number used for inline citations [1], [2], etc.",
+    )
+    document_id: uuid.UUID
+    chunk_id: uuid.UUID
+    chunk_index: int
+    chunk_text: str
+    similarity_score: float
+    filename: Optional[str] = None
+
+
 class ChatResponse(BaseModel):
-    """Response returned by the RAG chat endpoint."""
+    """Response returned by the RAG chat endpoint with inline citations and sources."""
 
     question: str
     answer: str
-    sources: List[SearchResultItem]
+    sources: List[CitationSourceItem]
