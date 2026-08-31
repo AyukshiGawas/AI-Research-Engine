@@ -91,6 +91,12 @@ class Settings(BaseSettings):
         description="OpenAI API key (required when EMBEDDING_PROVIDER=openai)",
     )
 
+    # Phase 8: RAG Chat Settings
+    CHAT_MODEL: str = Field(
+        default="gpt-4o-mini",
+        description="OpenAI Chat Completion model name for RAG chat",
+    )
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

@@ -50,3 +50,7 @@ class ChunkingError(AppException):
 class EmbeddingError(AppException):
     """Raised when embedding generation fails for a document chunk."""
 
+
+class ChatError(AppException):
+    """Raised when RAG chat generation fails."""
+

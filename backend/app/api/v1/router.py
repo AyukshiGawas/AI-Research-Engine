@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints.auth import router as auth_router
+from app.api.v1.endpoints.chat import router as chat_router
 from app.api.v1.endpoints.documents import router as documents_router
 from app.api.v1.endpoints.health import root_router, versioned_router
 from app.api.v1.endpoints.projects import router as projects_router
@@ -27,3 +28,6 @@ api_router.include_router(documents_router, prefix="/api/v1/projects", tags=["do
 
 # Phase 7: Semantic search
 api_router.include_router(search_router, prefix="/api/v1", tags=["search"])
+
+# Phase 8: AI Research Chat (RAG)
+api_router.include_router(chat_router, prefix="/api/v1", tags=["chat"])
