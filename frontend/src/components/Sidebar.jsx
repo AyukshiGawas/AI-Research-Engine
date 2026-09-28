@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, User, FolderKanban, ShieldCheck, FileText } from 'lucide-react';
+import { LayoutDashboard, User, FolderKanban, ShieldCheck, FileText, Search } from 'lucide-react';
 
 export const Sidebar = () => {
   return (
@@ -35,12 +35,19 @@ export const Sidebar = () => {
           >
             <FolderKanban className="sidebar-icon" />
             <span>Research Workspaces</span>
-            <span className="badge-pill">Phase 2</span>
           </NavLink>
+
+          <NavLink
+            to="/search"
+            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+          >
+            <Search className="sidebar-icon" />
+            <span>Semantic Search</span>
+          </NavLink>
+
           <div className="sidebar-link active-feature">
             <FileText className="sidebar-icon" />
             <span>Document Workspace</span>
-            <span className="badge-pill active">Phase 3</span>
           </div>
         </div>
       </div>

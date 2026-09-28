@@ -8,6 +8,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { DocumentWorkspacePage } from './pages/Documents/DocumentWorkspacePage';
+import { SearchPage } from './pages/SearchPage';
 import './index.css';
 
 export function App() {
@@ -31,6 +32,7 @@ export function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="search" element={<SearchPage />} />
             <Route path="projects/:projectId/documents" element={<DocumentWorkspacePage />} />
           </Route>
 
